@@ -34,7 +34,7 @@ RUN uv sync --locked
 COPY . .
 
 # Download models/assets during build (optional)
-RUN uv run src/agent.py download-files
+RUN uv run python -m livekit.agents download-files
 
 # ==========================
 # Runtime Stage

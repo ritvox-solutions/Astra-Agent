@@ -1,4 +1,5 @@
 import logging
+import os
 from typing import Optional
 from urllib.parse import quote
 import aiohttp
@@ -9,6 +10,7 @@ from livekit.agents import (
     Agent,
     AgentServer,
     AgentSession,
+    InterruptionOptions,
     JobContext,
     JobProcess,
     TurnHandlingOptions,
@@ -22,14 +24,21 @@ from livekit.agents import (
 )
 from livekit.agents.beta.tools import EndCallTool
 from livekit.plugins import (
-    ai_coustics,
+    noise_cancellation,
+    openai,
     silero,
+    nvidia,
 )
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
 logger = logging.getLogger("agent-Christy")
 
 load_dotenv(".env.local")
+
+# NVIDIA NIM exposes an OpenAI-compatible Chat Completions API, so we use the
+# `openai` plugin pointed at NVIDIA's endpoint instead of `inference.LLM`.
+NVIDIA_NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
+NVIDIA_NIM_MODEL = "nvidia/nemotron-3-ultra-550b-a55b"  # swap for any model NVIDIA NIM hosts
 
 
 class DefaultAgent(Agent):
@@ -106,19 +115,27 @@ server.setup_fnc = prewarm
 @server.rtc_session(agent_name="Christy")
 async def entrypoint(ctx: JobContext):
     session = AgentSession(
-        stt=inference.STT(model="deepgram/nova-3", language="en"),
-        llm=inference.LLM(
-            model="openai/gpt-5.1-chat-latest",
-            extra_kwargs={"reasoning_effort": "low"},
+        stt=nvidia.STT(),
+        llm=openai.LLM(
+            model=NVIDIA_NIM_MODEL,
+            base_url=NVIDIA_NIM_BASE_URL,
+            api_key=os.environ.get("NVIDIA_API_KEY"),
+            temperature=0.4,
         ),
-        tts=inference.TTS(
-            model="cartesia/sonic-3",
-            voice="a167e0f3-df7e-4d52-a9c3-f949145efdab",
-            language="en-US"
+        tts=nvidia.TTS(),
+        turn_handling=TurnHandlingOptions(
+            turn_detection=MultilingualModel(),
+            interruption=InterruptionOptions(
+                min_duration=0.6,   # require sustained speech, not a short echo blip
+                min_words=2,        # require actual words, not noise/echo fragments
+            ),
         ),
-        turn_handling=TurnHandlingOptions(turn_detection=MultilingualModel()),
         vad=ctx.proc.userdata["vad"],
         preemptive_generation=True,
+        # Ignore audio for a moment right after the agent starts speaking, so its
+        # own voice (before echo cancellation fully kicks in) isn't misread as a
+        # user interruption -- a common cause of agent-hears-itself loops.
+        aec_warmup_duration=3.0,
     )
 
     await session.start(
@@ -126,9 +143,7 @@ async def entrypoint(ctx: JobContext):
         room=ctx.room,
         room_options=room_io.RoomOptions(
             audio_input=room_io.AudioInputOptions(
-                noise_cancellation=ai_coustics.audio_enhancement(
-                    model=ai_coustics.EnhancerModel.QUAIL_VF_L,
-                ),
+                noise_cancellation=noise_cancellation.BVC(),
             ),
         ),
     )

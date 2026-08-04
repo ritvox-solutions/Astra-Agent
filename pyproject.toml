@@ -12,8 +12,10 @@ dependencies = [
     "livekit-agents[silero,turn-detector]~=1.5",
     "livekit-plugins-ai-coustics~=0.2",
     "livekit-plugins-noise-cancellation~=0.2",
+    "livekit-plugins-nvidia>=1.6.0",
+    "livekit-plugins-openai>=1.6.0",
     "python-dotenv",
-    "python-handlebars"
+    "python-handlebars",
 ]
 
 [dependency-groups]

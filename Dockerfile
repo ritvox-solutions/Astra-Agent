@@ -88,4 +88,4 @@ USER appuser
 # Run the application using UV
 # UV will activate the virtual environment and run the agent.
 # The "start" command tells the worker to connect to LiveKit and begin waiting for jobs.
-CMD ["uv", "run", "src\agent.py", "start"]
+CMD ["uv", "run", "src/agent.py", "start"]

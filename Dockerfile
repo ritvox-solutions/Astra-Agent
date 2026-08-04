@@ -57,7 +57,7 @@ COPY . .
 # Pre-download any ML models or files the agent needs
 # This runs after COPY so installed livekit-plugins-* packages can be discovered.
 # The module-level command discovers installed livekit-plugins-* packages.
-RUN uv run --module livekit.agents download-files
+RUN uv src/agent.py download-files
 
 # --- Production stage ---
 # Build tools (gcc, g++, python3-dev) are not included in the final image

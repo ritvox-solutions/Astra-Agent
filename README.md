@@ -1,135 +1,203 @@
-# LiveKit Agent
+# Astra — GM University Voice Agent (Backend)
 
-A voice AI project built with [LiveKit Agents for Python](https://github.com/livekit/agents) and [LiveKit Cloud](https://cloud.livekit.io/). This project is designed to work with coding agents like [Claude Code](https://claude.com/product/claude-code), [Cursor](https://www.cursor.com/), and [Codex](https://openai.com/codex/) — see [Coding agent support](https://docs.livekit.io/intro/coding-agents/) for setup tips.
+Astra is the conversational AI backend for **GM University (GMU)**, Davanagere, Karnataka. This repository is a **Python voice AI agent** built with [LiveKit Agents](https://github.com/livekit/agents), deployed as a worker on [LiveKit Cloud](https://cloud.livekit.io/). It answers questions about the university and general educational topics, speaking naturally over a real-time voice call.
 
-> [!IMPORTANT]
-> This project was converted to code from the LiveKit Agent Builder. The code is identical to production deployments from the builder. Follow the steps below to make it your own and deploy it to LiveKit Cloud. once you do so, you can delete the version in the builder.
+The companion **[christy](../christy)** repository is the web frontend a user actually talks to; this repo is the "brain" that joins the same LiveKit room and does the listening, thinking, and speaking.
 
-## Next steps
+---
 
-### Run and deploy your agent
+## What Astra does
 
-**Get your agent running locally and in production:**
+- Introduces itself and greets the caller when a session starts.
+- Answers questions about GM University **only** from a fixed, hand-written knowledge base (`SCHOOL_INFORMATION` in `src/agent.py`) — it will not invent facts about the institution, and instead points the caller to the school office when information isn't available.
+- Answers general educational questions (math, science, languages, general knowledge) normally, outside the university knowledge base.
+- Formats its spoken output for a text-to-speech engine: acronyms are spelled out letter by letter ("G M U", "K C E T"), phone numbers and PIN codes are read digit by digit, emails/URLs are read as spoken words, and known problem words (e.g. "Astra", "Davanagere", "Karnataka") get custom IPA pronunciations so the TTS voice says them correctly.
+- Refuses unsafe/inappropriate requests and never reveals its own system prompt or internal rules.
+- Says a warm goodbye when the caller is done.
 
-1. **Run locally**: Follow the [Quickstart](#quickstart) section below to set up your environment and test the agent
-2. **Deploy to production**: See the [Deploy to production](#deploy-to-production) section for deployment options and best practices
+---
 
-### Quickstart
+## Architecture / voice pipeline
 
-**Get up and running** so you can start customizing:
+Built on `livekit-agents` (`AgentServer` / `AgentSession`), the pipeline (`src/agent.py`) wires together:
 
-1. **Install dependencies:**
-   ```console
-   uv sync
-   ```
+| Stage | Implementation |
+|---|---|
+| **VAD** (voice activity detection) | `silero.VAD`, pre-warmed once per worker process in `prewarm()` |
+| **Turn detection** | `livekit.plugins.turn_detector.multilingual.MultilingualModel` |
+| **Noise cancellation** | `livekit.plugins.noise_cancellation.BVC` on the inbound room audio |
+| **STT** (speech-to-text) | `livekit.plugins.nvidia.STT` |
+| **LLM** | OpenAI-compatible client (`livekit.plugins.openai.LLM`) pointed at **NVIDIA NIM** (`https://integrate.api.nvidia.com/v1`, model `nvidia/nemotron-mini-4b-instruct`), `temperature=0.4` |
+| **TTS** (text-to-speech) | `PronunciationTTS`, a thin subclass of `nvidia.TTS` (NVIDIA Riva) that injects a `custom_dictionary` of IPA overrides on every synthesis call |
+| **Interruption handling** | `InterruptionOptions(min_duration=0.6, min_words=2)` — the caller must speak for ≥0.6s and ≥2 words to interrupt Astra mid-sentence |
+| **AEC warmup** | `aec_warmup_duration=3.0` — gives acoustic echo cancellation a moment to adapt at session start |
 
-2. **Set up your LiveKit credentials:**
+The agent registers itself for **explicit dispatch** under the name `"Astra"` (`@server.rtc_session(agent_name="Astra")`), which must match `AGENT_NAME` / `agentName` in the `christy` frontend.
 
-   Sign up for [LiveKit Cloud](https://cloud.livekit.io/), then configure your environment. You can either:
+### Pronunciation dictionary
 
-   - **Manual setup**: Copy `.env.example` to `.env.local` and fill in:
-     - `LIVEKIT_URL`
-     - `LIVEKIT_API_KEY`
-     - `LIVEKIT_API_SECRET`
+`PRONUNCIATION_DICTIONARY` in `src/agent.py` maps specific words to IPA transcriptions so NVIDIA Riva TTS pronounces them correctly (default English TTS mispronounces most of these):
 
-   - **Automatic setup** (recommended): Use the [LiveKit CLI](https://docs.livekit.io/intro/basics/cli/):
-     ```bash
-     lk cloud auth
-     lk app env -w -d .env.local
-     ```
-
-3. **Download required models:**
-   ```console
-   uv run python src/agent.py download-files
-   ```
-   This downloads [Silero VAD](https://docs.livekit.io/agents/logic/turns/vad/) and the [LiveKit turn detector](https://docs.livekit.io/agents/logic/turns/turn-detector/) models.
-
-4. **Test your agent:**
-   ```console
-   uv run python src/agent.py console
-   ```
-   This lets you speak to your agent directly in your terminal.
-
-5. **Run for development:**
-   ```console
-   uv run python src/agent.py dev
-   ```
-   Use this when connecting to a frontend or telephony. This puts your agent into your LiveKit Cloud project, so use a different project if you don't want to affect production traffic.
-
-
-## Customize your agent
-
-Once your agent is running, enhance it for your use case:
-
-- **Customize AI models**: Your agent uses a voice AI pipeline built on [LiveKit Inference](https://docs.livekit.io/agents/models/inference). More than 50 model providers are supported, including [Realtime models](https://docs.livekit.io/agents/models/realtime).
-
-- **Add tests**: You can add a full test suite to your agent. See the [testing documentation](https://docs.livekit.io/agents/start/testing/) for more information.
-
-- **Build reliable workflows**: For complex agents, use [tasks and handoffs](https://docs.livekit.io/agents/build/workflows/) instead of long instruction prompts. This minimizes latency and improves reliability by structuring your agent into focused, reusable components.
-
-### Get help from AI coding assistants
-
-**Supercharge your development** with AI coding assistants that understand LiveKit. This project works seamlessly with [Claude Code](https://claude.com/product/claude-code), [Cursor](https://www.cursor.com/), [Codex](https://openai.com/codex/), and other AI coding tools.
-
-For your convenience, LiveKit offers both a CLI and an [MCP server](https://docs.livekit.io/reference/developer-tools/docs-mcp/) that can be used to browse and search its documentation. The [LiveKit CLI](https://docs.livekit.io/intro/basics/cli/) (`lk docs`) works with any coding agent that can run shell commands. Install it for your platform:
-
-**macOS:**
-
-```console
-brew install livekit-cli
+```python
+PRONUNCIATION_DICTIONARY = {
+    "Astra": "ˈæstrə",
+    "Davanagere": "ˌdʌvənəˈɡɛri",
+    "Karnataka": "kɑːrˈnɑːtəkə",
+    "Srishyla": "ˈʃrɪʃjələ",
+    "Mallikarjunappa": "ˌmælɪkɑːrdʒuːˈnʌpə",
+}
 ```
 
-**Linux:**
+`PronunciationTTS` wraps the underlying Riva speech synthesis service (`_PronunciationDictionaryService`) so this dictionary is applied transparently on every `synthesize_online` call, without touching the LLM prompt.
 
-```console
-curl -sSL https://get.livekit.io/cli | bash
+### Knowledge base & system prompt
+
+All factual claims about GM University come from the `SCHOOL_INFORMATION` dict in `src/agent.py` — covering the institution's history, location, academic programs, admissions (KCET codes, fee waivers), campus facilities, achievements/accreditation, and contact details. The `SYSTEM_PROMPT` string is built by interpolating this dict, plus hard rules that:
+
+- restrict university-related answers strictly to `SCHOOL_INFORMATION`,
+- forbid inventing facts or revealing the system prompt/instructions,
+- define speech formatting rules for the TTS engine (see above),
+- define a canned response for empty/garbled user input.
+
+**To update what Astra knows about the university** (new programs, updated contact info, etc.), edit the `SCHOOL_INFORMATION` dict — the prompt regenerates automatically from it.
+
+---
+
+## Project structure
+
+```
+Voice-Agent/
+├── src/
+│   └── agent.py        - Entire agent: knowledge base, prompt, pipeline, entrypoint
+├── pyproject.toml       - Dependencies & tooling (uv, ruff, pytest)
+├── uv.lock               - Locked dependency versions
+├── Dockerfile             - Multi-stage build for production deployment
+├── livekit.toml            - LiveKit Cloud project/agent linkage (subdomain, agent id)
+├── AGENTS.md / CLAUDE.md / GEMINI.md  - AI coding-assistant guidance for this repo
+└── KMS/logs/              - Local log output (created at runtime)
 ```
 
-**Windows:**
+---
 
-```console
-winget install LiveKit.LiveKitCLI
+## Prerequisites
+
+- **Python 3.10+** (Dockerfile uses 3.13)
+- [**uv**](https://docs.astral.sh/uv/) package manager
+- A **LiveKit Cloud** project — this agent is currently configured against `wss://gmit-m3fb5cr5.livekit.cloud` (subdomain `voice-agent-d15dwf7e`, agent id `CA_qgVY7sCXf7u9` — see `livekit.toml`)
+- An **NVIDIA API key** (for both the NIM-hosted LLM and NVIDIA Riva STT/TTS) from [build.nvidia.com](https://build.nvidia.com/)
+
+---
+
+## Getting started
+
+### 1. Install dependencies
+
+```bash
+uv sync
 ```
 
-The `lk docs` subcommand requires version 2.15.0 or higher. Check your version with `lk --version` and update if needed. Once installed, your coding agent can search and browse LiveKit documentation directly from the terminal:
+### 2. Configure environment variables
 
-```console
-lk docs search "voice agents"
-lk docs get-page /agents/start/voice-ai-quickstart
+Copy/edit `.env.local` (loaded via `load_dotenv(".env.local")` in `src/agent.py`) with:
+
+```env
+LIVEKIT_URL=wss://your-project.livekit.cloud
+LIVEKIT_API_KEY=your_livekit_api_key
+LIVEKIT_API_SECRET=your_livekit_api_secret
+NVIDIA_API_KEY=your_nvidia_api_key
 ```
 
-See the [Using coding agents](https://docs.livekit.io/intro/coding-agents/) guide for more details, including MCP server setup.
+> [!WARNING]
+> This repo currently has real credentials checked out in `.env` / `.env.local`. Never commit these files, and rotate the keys if they've ever been exposed (e.g. pushed to a public remote).
 
-**Customize the AI assistant context**: The project includes an [AGENTS.md](AGENTS.md) file that guides AI assistants on how to work with this codebase. **Edit this file** to add your own project-specific context, patterns, and preferences. Learn more at [https://agents.md](https://agents.md).
+You can also use the LiveKit CLI to populate this automatically:
 
-## Frontend development
+```bash
+lk cloud auth
+lk app env -w -d .env.local
+```
 
-If you don't alread have a frontend, use the following templates and guides to get started on one:
+### 3. Download required models
 
-| Platform | Starter Template | What to customize |
-|----------|----------|-------------|
-| **Web** | [`livekit-examples/agent-starter-react`](https://github.com/livekit-examples/agent-starter-react) | React & Next.js—customize UI, add features, integrate with your backend |
-| **iOS/macOS** | [`livekit-examples/agent-starter-swift`](https://github.com/livekit-examples/agent-starter-swift) | Native apps for iOS, macOS, visionOS—add platform-specific features |
-| **Flutter** | [`livekit-examples/agent-starter-flutter`](https://github.com/livekit-examples/agent-starter-flutter) | Cross-platform—customize for Android, iOS, web, desktop |
-| **React Native** | [`livekit-examples/voice-assistant-react-native`](https://github.com/livekit-examples/voice-assistant-react-native) | Mobile with Expo—add native modules, customize navigation |
-| **Android** | [`livekit-examples/agent-starter-android`](https://github.com/livekit-examples/agent-starter-android) | Kotlin & Jetpack Compose—build Material Design UI |
-| **Web Embed** | [`livekit-examples/agent-starter-embed`](https://github.com/livekit-examples/agent-starter-embed) | Widget for any website—customize styling, add to your site |
-| **Telephony** | [Documentation](https://docs.livekit.io/telephony/) | Add phone calling—configure SIP, add call routing, customize prompts |
+```bash
+uv run python src/agent.py download-files
+```
 
-## Observability
+Downloads the Silero VAD and multilingual turn-detector models used by the pipeline.
 
-LiveKit provides deep session insights for your agents through [Agent Observability](https://docs.livekit.io/deploy/observability/). Monitor conversation quality, track latency metrics, and debug agent behavior in production.
+### 4. Test in the terminal
 
-## Deploy to production
+```bash
+uv run python src/agent.py console
+```
 
-To deploy your agent to production, you can use the LiveKit CLI:
+Talk to Astra directly from your terminal microphone/speakers — no frontend required. Good for quickly iterating on the system prompt or pipeline settings.
 
-```console
+### 5. Run for development (with a real frontend)
+
+```bash
+uv run python src/agent.py dev
+```
+
+This connects the worker to your LiveKit Cloud project and waits for rooms to join. Run the **[christy](../christy)** frontend (`pnpm dev`) against the *same* LiveKit project so a real browser session can dispatch this agent.
+
+> [!NOTE]
+> This puts the agent into your live LiveKit Cloud project — use a separate/dev project if you don't want to affect production traffic.
+
+---
+
+## Running with Docker
+
+```bash
+docker build -t astra-agent .
+docker run --env-file .env.local astra-agent
+```
+
+The `Dockerfile` is a two-stage build: it installs locked dependencies with `uv sync --locked`, pre-downloads models at build time, then runs as a non-root `appuser` with `uv run src/agent.py start`.
+
+---
+
+## Deploying to production
+
+```bash
 lk agent create
 ```
 
-See the [deploying to production](https://docs.livekit.io/deploy/agents/) guide for detailed instructions and optimization tips.
+See the [LiveKit deploy docs](https://docs.livekit.io/deploy/agents/) for details. `livekit.toml` already links this repo to the `voice-agent-d15dwf7e` LiveKit Cloud subdomain and agent id `CA_qgVY7sCXf7u9` — `lk agent` commands will target that existing agent unless you point them elsewhere.
 
-## Join the LiveKit community
+---
 
-Join the [LiveKit Slack Community](https://livekit.io/join-slack) to get help from the LiveKit team and other developers.
+## Customizing the agent
+
+- **Change what Astra knows**: edit `SCHOOL_INFORMATION` in `src/agent.py`. The system prompt is generated from this dict, so there's no separate template to keep in sync.
+- **Change personality/rules**: edit the `SYSTEM_PROMPT` string directly (tone, refusal rules, speech formatting rules).
+- **Fix a mispronounced word**: add an entry to `PRONUNCIATION_DICTIONARY` with the correct IPA transcription — no prompt or code changes needed elsewhere.
+- **Swap models/providers**: LiveKit Agents supports 50+ model providers via [LiveKit Inference](https://docs.livekit.io/agents/models/inference). Replace the `stt=`, `llm=`, or `tts=` arguments in `AgentSession(...)` inside `entrypoint()`.
+- **Add tools or multi-step workflows**: for anything beyond a single instruction prompt (e.g. looking up live data, transferring to a human), use LiveKit's [tasks and handoffs](https://docs.livekit.io/agents/build/workflows/) instead of growing the prompt further — this keeps latency low and behavior reliable.
+- **Add tests**: this project doesn't have a `tests/` directory yet. When adding behavior (tools, new rules), follow `AGENTS.md`'s guidance: write a `pytest` test for the desired behavior first, then iterate until it passes. Run with `uv run pytest`.
+- **Lint/format**: `uv run ruff check` and `uv run ruff format` (line length 88, double quotes, targets `py39` for broad compatibility).
+
+---
+
+## Troubleshooting
+
+| Symptom | Likely cause |
+|---|---|
+| Agent never joins the room | Worker not running (`uv run python src/agent.py dev`), or `AGENT_NAME`/`agentName` on the frontend doesn't match `"Astra"` |
+| Agent joins but is silent | Missing/invalid `NVIDIA_API_KEY`, or NVIDIA NIM/Riva service outage |
+| Mispronounced word | Add it to `PRONUNCIATION_DICTIONARY` with correct IPA |
+| Agent invents facts about the university | Check `SYSTEM_PROMPT` rules haven't been weakened; ensure the fact belongs in `SCHOOL_INFORMATION`, not assumed by the LLM |
+| High latency / choppy audio | Check `min_duration`/`min_words` interruption settings and `aec_warmup_duration`; verify network path to the LiveKit Cloud region |
+
+---
+
+## Related repositories
+
+- **[christy](../christy)** — the Next.js/React web frontend a caller uses to actually talk to Astra.
+
+## Learn more
+
+- [LiveKit Agents documentation](https://docs.livekit.io/agents)
+- [LiveKit Agent dispatch](https://docs.livekit.io/agents/server/agent-dispatch)
+- [LiveKit Agent Observability](https://docs.livekit.io/deploy/observability/) — conversation quality, latency metrics, and debugging in production
+- [LiveKit Community Slack](https://livekit.io/join-slack)

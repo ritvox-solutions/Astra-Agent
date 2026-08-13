@@ -11,7 +11,7 @@ The companion **[christy](../christy)** repository is the web frontend a user ac
 - Introduces itself and greets the caller when a session starts.
 - Answers questions about GM University **only** from a fixed, hand-written knowledge base (`SCHOOL_INFORMATION` in `src/agent.py`) — it will not invent facts about the institution, and instead points the caller to the school office when information isn't available.
 - Answers general educational questions (math, science, languages, general knowledge) normally, outside the university knowledge base.
-- Formats its spoken output for a text-to-speech engine: acronyms are spelled out letter by letter ("G M U", "K C E T"), phone numbers and PIN codes are read digit by digit, emails/URLs are read as spoken words, and known problem words (e.g. "Astra", "Davanagere", "Karnataka") get custom IPA pronunciations so the TTS voice says them correctly.
+- Formats its spoken output for a text-to-speech engine: acronyms are spelled out letter by letter ("G M U", "K C E T"), phone numbers and PIN codes are read digit by digit, emails/URLs are read as spoken words, and known problem words (e.g. "Astra", "Davanagere", "Karnataka", "Lingaraju") get inline phoneme overrides so the TTS voice says them correctly.
 - Refuses unsafe/inappropriate requests and never reveals its own system prompt or internal rules.
 - Says a warm goodbye when the caller is done.
 
@@ -26,33 +26,32 @@ Built on `livekit-agents` (`AgentServer` / `AgentSession`), the pipeline (`src/a
 | **VAD** (voice activity detection) | `silero.VAD`, pre-warmed once per worker process in `prewarm()` |
 | **Turn detection** | `livekit.plugins.turn_detector.multilingual.MultilingualModel` |
 | **Noise cancellation** | `livekit.plugins.noise_cancellation.BVC` on the inbound room audio |
-| **STT** (speech-to-text) | `livekit.plugins.nvidia.STT` |
-| **LLM** | OpenAI-compatible client (`livekit.plugins.openai.LLM`) pointed at **NVIDIA NIM** (`https://integrate.api.nvidia.com/v1`, model `nvidia/nemotron-mini-4b-instruct`), `temperature=0.4` |
-| **TTS** (text-to-speech) | `PronunciationTTS`, a thin subclass of `nvidia.TTS` (NVIDIA Riva) that injects a `custom_dictionary` of IPA overrides on every synthesis call |
-| **Interruption handling** | `InterruptionOptions(min_duration=0.6, min_words=2)` — the caller must speak for ≥0.6s and ≥2 words to interrupt Astra mid-sentence |
+| **STT** (speech-to-text) | `livekit.plugins.nvidia.STT` (`language_code="en-US"`) |
+| **LLM** | OpenAI-compatible client (`livekit.plugins.openai.LLM`) pointed at **NVIDIA NIM** (`https://integrate.api.nvidia.com/v1`, model `nvidia/nemotron-mini-4b-instruct`), `temperature=0.2` |
+| **TTS** (text-to-speech) | `PronounceTTS`, a thin subclass of `cartesia.TTS` (model `sonic-3`) that rewrites known proper nouns into inline Cartesia phoneme tags before every `synthesize()`/`stream()` call |
+| **Interruption handling** | `InterruptionOptions(min_duration=1.0, min_words=3, resume_false_interruption=True, false_interruption_timeout=2.0)` — the caller must speak for ≥1.0s and ≥3 words to interrupt Astra mid-sentence; a false interruption is forgiven and Astra resumes speaking if the caller doesn't follow up within 2s |
 | **AEC warmup** | `aec_warmup_duration=3.0` — gives acoustic echo cancellation a moment to adapt at session start |
 
 The agent registers itself for **explicit dispatch** under the name `"Astra"` (`@server.rtc_session(agent_name="Astra")`), which must match `AGENT_NAME` / `agentName` in the `christy` frontend.
 
-### Pronunciation dictionary
+### Pronunciation overrides
 
-`PRONUNCIATION_DICTIONARY` in `src/agent.py` maps specific words to IPA transcriptions so NVIDIA Riva TTS pronounces them correctly (default English TTS mispronounces most of these):
+`PRONUNCIATION_MAP` in `src/agent.py` maps proper nouns to inline Cartesia phoneme tags (`<<ˈ|æ|s|t|ɹ|ə>>` syntax — pipe-separated phonemes with a stress marker) so the `sonic-3` voice pronounces them correctly (default TTS mispronounces most of these):
 
 ```python
-PRONUNCIATION_DICTIONARY = {
-    "Astra": "ˈæstrə",
-    "Davanagere": "ˌdʌvənəˈɡɛri",
-    "Karnataka": "kɑːrˈnɑːtəkə",
-    "Srishyla": "ˈʃrɪʃjələ",
-    "Mallikarjunappa": "ˌmælɪkɑːrdʒuːˈnʌpə",
+PRONUNCIATION_MAP: dict[str, str] = {
+    "Davanagere": "<<ˌ|d|ʌ|v|ə|n|ə|ˈ|ɡ|ɛ|r|i>>",
+    "Karnataka": "<<k|ɑː|ɹ|ˈ|n|ɑː|t|ə|k|ə>>",
+    "Astra": "<<ˈ|æ|s|t|ɹ|ə>>",
+    # ...plus Srishyla, Mallikarjunappa, Lingaraju, Shankapal, Shaukpal, Venu, Subhash, Robotics
 }
 ```
 
-`PronunciationTTS` wraps the underlying Riva speech synthesis service (`_PronunciationDictionaryService`) so this dictionary is applied transparently on every `synthesize_online` call, without touching the LLM prompt.
+`_apply_pronunciation()` regex-substitutes any whole-word, case-insensitive match with its phoneme tag. `PronounceTTS` (a subclass of `cartesia.TTS`) runs every `synthesize()` call and every token pushed to `stream()` through this function before it reaches Cartesia — so the override happens purely at the TTS layer, without touching the LLM prompt.
 
 ### Knowledge base & system prompt
 
-All factual claims about GM University come from the `SCHOOL_INFORMATION` dict in `src/agent.py` — covering the institution's history, location, academic programs, admissions (KCET codes, fee waivers), campus facilities, achievements/accreditation, and contact details. The `SYSTEM_PROMPT` string is built by interpolating this dict, plus hard rules that:
+All factual claims about GM University come from the `SCHOOL_INFORMATION` dict in `src/agent.py` — covering the institution's history, location, current enrollment stats, academic areas, detailed engineering programs (including a dedicated Robotics & Automation breakdown of labs and software), KCET admission codes, scholarships, campus facilities, hostel details, achievements/accreditation, contact details, and leadership. The `SYSTEM_PROMPT` string is built by interpolating this dict, plus hard rules that:
 
 - restrict university-related answers strictly to `SCHOOL_INFORMATION`,
 - forbid inventing facts or revealing the system prompt/instructions,
@@ -68,13 +67,13 @@ All factual claims about GM University come from the `SCHOOL_INFORMATION` dict i
 ```
 Voice-Agent/
 ├── src/
-│   └── agent.py        - Entire agent: knowledge base, prompt, pipeline, entrypoint
+│   ├── agent.py         - Deployed entrypoint: knowledge base, prompt, pipeline
+│   └── sample.py        - Experimental variant with live web-fetch tools (not wired to the Dockerfile entrypoint)
 ├── pyproject.toml       - Dependencies & tooling (uv, ruff, pytest)
 ├── uv.lock               - Locked dependency versions
 ├── Dockerfile             - Multi-stage build for production deployment
 ├── livekit.toml            - LiveKit Cloud project/agent linkage (subdomain, agent id)
-├── AGENTS.md / CLAUDE.md / GEMINI.md  - AI coding-assistant guidance for this repo
-└── KMS/logs/              - Local log output (created at runtime)
+└── AGENTS.md / CLAUDE.md / GEMINI.md  - AI coding-assistant guidance for this repo
 ```
 
 ---
@@ -84,7 +83,8 @@ Voice-Agent/
 - **Python 3.10+** (Dockerfile uses 3.13)
 - [**uv**](https://docs.astral.sh/uv/) package manager
 - A **LiveKit Cloud** project — this agent is currently configured against `wss://gmit-m3fb5cr5.livekit.cloud` (subdomain `voice-agent-d15dwf7e`, agent id `CA_qgVY7sCXf7u9` — see `livekit.toml`)
-- An **NVIDIA API key** (for both the NIM-hosted LLM and NVIDIA Riva STT/TTS) from [build.nvidia.com](https://build.nvidia.com/)
+- An **NVIDIA API key** (for the NIM-hosted LLM and NVIDIA STT) from [build.nvidia.com](https://build.nvidia.com/)
+- A **Cartesia API key** (for TTS) from [cartesia.ai](https://cartesia.ai/)
 
 ---
 
@@ -105,6 +105,7 @@ LIVEKIT_URL=wss://your-project.livekit.cloud
 LIVEKIT_API_KEY=your_livekit_api_key
 LIVEKIT_API_SECRET=your_livekit_api_secret
 NVIDIA_API_KEY=your_nvidia_api_key
+CARTESIA_API_KEY=your_cartesia_api_key
 ```
 
 > [!WARNING]
@@ -171,7 +172,7 @@ See the [LiveKit deploy docs](https://docs.livekit.io/deploy/agents/) for detail
 
 - **Change what Astra knows**: edit `SCHOOL_INFORMATION` in `src/agent.py`. The system prompt is generated from this dict, so there's no separate template to keep in sync.
 - **Change personality/rules**: edit the `SYSTEM_PROMPT` string directly (tone, refusal rules, speech formatting rules).
-- **Fix a mispronounced word**: add an entry to `PRONUNCIATION_DICTIONARY` with the correct IPA transcription — no prompt or code changes needed elsewhere.
+- **Fix a mispronounced word**: add an entry to `PRONUNCIATION_MAP` with the correct Cartesia phoneme tag — no prompt or code changes needed elsewhere.
 - **Swap models/providers**: LiveKit Agents supports 50+ model providers via [LiveKit Inference](https://docs.livekit.io/agents/models/inference). Replace the `stt=`, `llm=`, or `tts=` arguments in `AgentSession(...)` inside `entrypoint()`.
 - **Add tools or multi-step workflows**: for anything beyond a single instruction prompt (e.g. looking up live data, transferring to a human), use LiveKit's [tasks and handoffs](https://docs.livekit.io/agents/build/workflows/) instead of growing the prompt further — this keeps latency low and behavior reliable.
 - **Add tests**: this project doesn't have a `tests/` directory yet. When adding behavior (tools, new rules), follow `AGENTS.md`'s guidance: write a `pytest` test for the desired behavior first, then iterate until it passes. Run with `uv run pytest`.
@@ -184,8 +185,8 @@ See the [LiveKit deploy docs](https://docs.livekit.io/deploy/agents/) for detail
 | Symptom | Likely cause |
 |---|---|
 | Agent never joins the room | Worker not running (`uv run python src/agent.py dev`), or `AGENT_NAME`/`agentName` on the frontend doesn't match `"Astra"` |
-| Agent joins but is silent | Missing/invalid `NVIDIA_API_KEY`, or NVIDIA NIM/Riva service outage |
-| Mispronounced word | Add it to `PRONUNCIATION_DICTIONARY` with correct IPA |
+| Agent joins but is silent | Missing/invalid `NVIDIA_API_KEY` (STT/LLM) or `CARTESIA_API_KEY` (TTS), or a provider outage |
+| Mispronounced word | Add it to `PRONUNCIATION_MAP` with the correct Cartesia phoneme tag |
 | Agent invents facts about the university | Check `SYSTEM_PROMPT` rules haven't been weakened; ensure the fact belongs in `SCHOOL_INFORMATION`, not assumed by the LLM |
 | High latency / choppy audio | Check `min_duration`/`min_words` interruption settings and `aec_warmup_duration`; verify network path to the LiveKit Cloud region |
 

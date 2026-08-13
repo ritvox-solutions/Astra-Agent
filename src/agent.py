@@ -1,6 +1,6 @@
 import logging
+import os
 import re
-from datetime import date, timezone
 
 from dotenv import load_dotenv
 from livekit.agents import (
@@ -12,13 +12,13 @@ from livekit.agents import (
     JobProcess,
     TurnHandlingOptions,
     cli,
-    function_tool,
     room_io,
 )
 from livekit.plugins import (
     cartesia,
-    groq,
     noise_cancellation,
+    nvidia,
+    openai,
     silero,
 )
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
@@ -35,10 +35,12 @@ PRONUNCIATION_MAP: dict[str, str] = {
     "Srishyla": "<<ˈ|ʃ|ɹ|ɪ|ʃ|j|ə|l|ə>>",
     "Mallikarjunappa": "<<ˌ|m|æ|l|ɪ|k|ɑː|ɹ|dʒ|uː|ˈ|n|ʌ|p|ə>>",
     "Lingaraju": "<<ˌ|l|ɪ|ŋ|ɡ|ə|ˈ|ɹ|ɑː|dʒ|uː>>",
+    "Shankapal": "<<ˈ|ʃ|æ|ŋ|k|ə|p|ɑː|l>>",
     "Shaukpal": "<<ˈ|ʃ|ɔː|k|p|ɑː|l>>",
     "Venu": "<<ˈ|v|eɪ|n|uː>>",
     "Subhash": "<<s|uː|ˈ|b|ɑː|ʃ>>",
     "Astra": "<<ˈ|æ|s|t|ɹ|ə>>",
+    "Robotics": "<<ɹ|oʊ|ˈ|b|ɑ|t|ɪ|k|s>>",
 }
 
 _PRONUNCIATION_RE = re.compile(
@@ -59,80 +61,101 @@ def _apply_pronunciation(text: str) -> str:
 
 
 SCHOOL_INFORMATION = {
-    "institution_name": "GM University",
+    "institution_name": "GM University (GMU)",
     "motto": "Igniting Innovation, Inspiring Transformation",
     "about": (
-        "GM University, also known as GMU, is a private university in Davanagere, "
-        "Karnataka, established in 2023 under Act 19 of the Karnataka state "
-        "legislature. It was founded by the Srishyla Education Trust, which was "
-        "started in 2000 by Sri G. Mallikarjunappa, a well-known philanthropist and "
-        "social visionary. The university sits on a 57-acre campus and has over "
-        "10,000 students, more than 350 experienced faculty members, and offers "
-        "over 67 academic programs across undergraduate, postgraduate, doctoral, "
-        "and vocational levels."
+        "GM University is in Davanagere, Karnataka. It was established "
+        "under Act 19 of 2023 of the State of Karnataka. The university was "
+        "founded by the Srishyla Education Trust, which was started in 2000 by "
+        "Sri G. Mallikarjunappa, a well-known philanthropist and social visionary."
     ),
-    "location": ("GM University is located on P B Road, Davanagere, Karnataka, India."),
-    "programs": (
-        "GM University offers undergraduate, postgraduate, and doctoral programs "
-        "through several schools: the Faculty of Engineering and Technology, the "
-        "Faculty of Computing and IT, the Faculty of Basic and Applied Sciences, "
-        "the Faculty of Commerce and Management, and the GM School of Law. At the "
-        "postgraduate level, there is the GM Business School offering an MBA, the "
-        "GM School of Advanced Studies, and postgraduate diploma programs. Popular "
-        "specializations include Computer Science Engineering, Artificial "
-        "Intelligence and Machine Learning, Internet of Things, Cybersecurity, "
-        "Cloud Computing, Electronics and Communication Engineering, Electrical "
-        "and Electronics Engineering, Mechanical Engineering, Civil Engineering, "
-        "Robotics, Biotechnology, and Pharmacy. Vocational degree programs, "
-        "diploma courses, and a part-time evening B.Tech are also available, "
-        "along with PhD programs across multiple disciplines."
+    "location": ("GM University is at P.B. Road, Davanagere, Karnataka, PIN 577006."),
+    "current_statistics": (
+        "The current GMU campus features more than 10,000 students, "
+        "67 academic programs, 57 acres, and more than 350 experienced faculty members."
+    ),
+    "academic_areas": (
+        "GMU has academic schools and faculties including Engineering and Technology, "
+        "Computing and IT, Basic and Applied Sciences, Commerce and Management, "
+        "Legal Studies, Business School, and School of Advanced Studies."
+    ),
+    "engineering_programs": (
+        "GMU lists engineering programs including Computer Science and Engineering, "
+        "Artificial Intelligence and Machine Learning, Information Science and Engineering, "
+        "Data Science, Cloud Computing, Cyber Security, Internet of Things, "
+        "Electronics and Communication Engineering, Electrical and Electronics Engineering, "
+        "Robotics and Automation, Engineering Design, Civil Engineering, Biotechnology, "
+        "and Mechanical Engineering."
+    ),
+    "robotics": (
+        "GM University has a Department of Robotics and Automation under the "
+        "Faculty of Engineering and Technology. The department offers a "
+        "full-time B Tech in Robotics and Automation with a four-year duration."
+    ),
+    "robotics_facilities": (
+        "The Robotics and Automation department has facilities including "
+        "Robotics Laboratory, Artificial Intelligence Lab, IoT Laboratory, "
+        "Machine Learning Lab, Robotics Simulation Lab, Sensors and Instrumentation Lab, "
+        "Industrial IoT Lab, Product Development Lab, Project Based Learning Lab, "
+        "Digital Electronics Lab, Basic Electronics Lab, Python Programming Lab, "
+        "C Programming Lab, AutoCAD Lab, 3D Modelling and Animation Lab, "
+        "Mechanical Workshop, and Fabrication and Assembly Workshop."
+    ),
+    "robotics_software": (
+        "The Robotics and Automation department uses tools and software "
+        "including ROS, MATLAB and Simulink, LabVIEW, Arduino IDE, ANSYS, SolidWorks, "
+        "Proteus, Multisim, Gazebo, Webots, CoppeliaSim, Python, OpenCV, TensorFlow, "
+        "PyTorch, Siemens TIA Portal, Factory I O, Fusion 360, CATIA, Blender, Unity, "
+        "Node-RED, Blynk, and GitHub."
+    ),
+    "kcet_codes": (
+        "The current GMU website lists KCET B Tech code E303, M C A code C568, "
+        "and M B A code B086."
     ),
     "admissions": (
-        "Admissions are based on entrance exams, with KCET codes E303 for B.Tech, "
-        "C568 for MCA, and B086 for MBA. Lateral entry and international "
-        "admissions are also supported. GM University offers a 100 percent "
-        "tuition fee waiver for students ranking within the top 2000 in KCET, a "
-        "75 percent waiver for state or national level sports achievers, and "
-        "further scholarships for economically disadvantaged students, along "
-        "with education loan assistance. To apply, visit the admissions page at "
-        "gmu.ac.in or contact the admissions office directly for the latest "
-        "procedures, fees, and important dates."
+        "Admissions are based on entrance exams. Lateral entry and international "
+        "admissions are also supported. For current fees, deadlines, eligibility details, "
+        "seat availability, and detailed admission procedures, contact the admissions office."
+    ),
+    "scholarships": (
+        "GM University offers a 100 percent tuition fee waiver for students ranking "
+        "within the top 2000 in KCET. Students with outstanding state or national level "
+        "sports achievements can receive a 75 percent tuition fee waiver. Scholarships are "
+        "available for economically disadvantaged students, along with education loan assistance."
     ),
     "facilities": (
-        "The 57-acre campus features the IDEA Lab, an innovation and incubation "
-        "hub, a library with a digital repository, a learning management system, "
-        "dedicated research centers, a vocational training center, sports and "
-        "athletics facilities, and a wide range of technical and non-technical "
-        "student clubs."
+        "GMU campus has a library, sports and athletics facilities, separate "
+        "hostels for boys and girls, cafeteria, transport facilities, student "
+        "activities, an IDEA Lab for innovation and incubation, research and innovation "
+        "centers, skill and vocational training, and technical and non-technical student clubs."
+    ),
+    "hostel": (
+        "GM University has separate hostels for boys and girls. "
+        "Vegetarian food is served in the hostels. For current hostel fees, "
+        "vacancies, and room details, contact the hostel office directly."
     ),
     "achievements": (
         "GM University complies with UGC, the University Grants Commission, "
         "disclosure and regulatory requirements, and has received a Sustainable "
         "Institutions of India certification. It maintains strategic partnerships "
         "and MOUs with international universities including Clark University in "
-        "the USA and De Montfort University in the UK, as well as with IIIT "
+        "the U S A and De Montfort University in the U K, as well as with I I I T "
         "Dharwad Research Park, and is active in research publications, "
         "conferences, and patents."
     ),
+    "email": (
+        "General inquiries: info@gmu.ac.in. "
+        "Admissions: admissions@gmu.ac.in."
+    ),
     "contact_numbers": (
-        "The main university numbers are +91 8192 233344, +91 8192 233345, and "
-        "9364099720. Full department-wise contact numbers are available on the "
-        "official website."
+        "Main university numbers: +91 8192 233344, +91 8192 233345, and "
+        "9364099720. For department-specific contact numbers, visit the official website."
     ),
-    "email_addresses": (
-        "For general inquiries, email info@gmu.ac.in. For admissions-related "
-        "questions, email admissions@gmu.ac.in."
-    ),
-    "website": "www.gmu.ac.in",
+    "website": "https://gmu.ac.in/",
     "leadership": (
-        "GM University was founded by the Srishyla Education Trust under Sri G. "
-        "Mallikarjunappa. The Honorary Chairman of GM University is Shri G. M. "
-        "Lingaraju. The Honorary Vice Chancellor is Dr. S. R. Shaukpal. The "
-        "Honorary Pro Vice Chancellor is Dr. M. Venu Gopal Rao. The Honorary "
-        "Registrar is Dr. B. S. Sunil Kumar. The Honorary Management "
-        "Representative is Shri Y. V. Subhash Chandra."
+        "The current GMU website lists G. M. Lingaraju as Chancellor and "
+        "Dr. S. R. Shankapal as Vice-Chancellor."
     ),
-    "lingaraju_birthday": "August 15",
 }
 
 SYSTEM_PROMPT = f"""
@@ -167,21 +190,29 @@ SCHOOL_INFORMATION:
 - Motto: {SCHOOL_INFORMATION["motto"]}
 - About: {SCHOOL_INFORMATION["about"]}
 - Location: {SCHOOL_INFORMATION["location"]}
-- Programs: {SCHOOL_INFORMATION["programs"]}
+- Current Statistics: {SCHOOL_INFORMATION["current_statistics"]}
+- Academic Areas: {SCHOOL_INFORMATION["academic_areas"]}
+- Engineering Programs: {SCHOOL_INFORMATION["engineering_programs"]}
+- Robotics Department: {SCHOOL_INFORMATION["robotics"]}
+- Robotics Facilities: {SCHOOL_INFORMATION["robotics_facilities"]}
+- Robotics Software and Tools: {SCHOOL_INFORMATION["robotics_software"]}
+- KCET Codes: {SCHOOL_INFORMATION["kcet_codes"]}
 - Admissions: {SCHOOL_INFORMATION["admissions"]}
+- Scholarships: {SCHOOL_INFORMATION["scholarships"]}
 - Facilities: {SCHOOL_INFORMATION["facilities"]}
+- Hostel: {SCHOOL_INFORMATION["hostel"]}
 - Achievements: {SCHOOL_INFORMATION["achievements"]}
+- Email Addresses: {SCHOOL_INFORMATION["email"]}
 - Contact Numbers: {SCHOOL_INFORMATION["contact_numbers"]}
-- Email Addresses: {SCHOOL_INFORMATION["email_addresses"]}
 - Website: {SCHOOL_INFORMATION["website"]}
 - Leadership: {SCHOOL_INFORMATION["leadership"]}
 
 BIRTHDAY RULES:
-- Shri G. M. Lingaraju's birthday is {SCHOOL_INFORMATION["lingaraju_birthday"]}.
-- If the user asks about Lingaraju's birthday, tell them it is {SCHOOL_INFORMATION["lingaraju_birthday"]}.
-- At the start of every conversation, use the get_current_date tool to check today's date.
-- If today is August 15 and the user identifies themselves as Lingaraju (or says "I am Lingaraju", "this is Lingaraju", "Lingaraju here", etc.), wish him a happy birthday warmly and personally.
-- If today is August 15 and the user is NOT Lingaraju, mention that today is Shri G. M. Lingaraju's birthday in a natural, conversational way during your greeting or response.
+- If the user says or implies: "Today is G M Lingaraju's birthday", "Today is Shri G. M. Lingaraju's birthday", or similar wording, respond by wishing Shri G. M. Lingaraju a happy birthday in a warm and generous way.
+- Keep the birthday wish concise and respectful, for example: "Happy Birthday, Sir. Wishing you a day filled with joy, health, and happiness. Thank you for your leadership and inspiration."
+- Do not use any date-based trigger. Do not check the calendar. Do not require August 15 to trigger the wish.
+- If the user asks about his birthday date, answer plainly: "Shri G. M. Lingaraju's birthday is August 15."
+- Never force the birthday wish when the user is not referring to Shri G. M. Lingaraju.
 """
 
 
@@ -226,19 +257,11 @@ class PronounceTTS(cartesia.TTS):
         return _PronounceStream(super().stream(conn_options=conn_options))
 
 
-@function_tool
-async def get_current_date() -> str:
-    """Get today's date in the format 'Month Day, Year' (e.g. 'August 15, 2025').
-    Use this to check if today matches any important dates like birthdays."""
-    today = date.now(timezone.utc)
-    return today.strftime("%B %d, %Y")
-
-
 class DefaultAgent(Agent):
     def __init__(self) -> None:
         super().__init__(
             instructions=SYSTEM_PROMPT,
-            tools=[get_current_date],
+            tools=[],
         )
 
     async def on_enter(self):
@@ -261,13 +284,14 @@ server.setup_fnc = prewarm
 @server.rtc_session(agent_name="Astra")
 async def entrypoint(ctx: JobContext):
     session = AgentSession(
-        stt=groq.STT(
-            model="whisper-large-v3-turbo",
-            language="en",
+        stt=nvidia.STT(
+            language_code="en-US",
         ),
-        llm=groq.LLM(
-            model="llama-3.3-70b-versatile",
-            temperature=0.4,
+        llm=openai.LLM(
+            model="nvidia/nemotron-mini-4b-instruct",
+            base_url="https://integrate.api.nvidia.com/v1",
+            api_key=os.environ.get("NVIDIA_API_KEY"),
+            temperature=0.2,
         ),
         tts=PronounceTTS(
             model="sonic-3",

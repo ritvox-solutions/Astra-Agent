@@ -8,3 +8,4 @@ dist/
 build/
 .ruff_cache/
 lk_dump/
+src/api.txt

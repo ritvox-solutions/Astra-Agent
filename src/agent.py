@@ -1,5 +1,5 @@
 import logging
-import os
+import re
 
 from dotenv import load_dotenv
 from livekit.agents import (
@@ -14,9 +14,9 @@ from livekit.agents import (
     room_io,
 )
 from livekit.plugins import (
+    cartesia,
+    groq,
     noise_cancellation,
-    nvidia,
-    openai,
     silero,
 )
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
@@ -25,53 +25,35 @@ logger = logging.getLogger("agent-Astra")
 
 load_dotenv(".env.local")
 
-NVIDIA_NIM_BASE_URL = "https://integrate.api.nvidia.com/v1"
-NVIDIA_NIM_MODEL = "nvidia/nemotron-mini-4b-instruct"
-
-# Riva TTS pronunciation overrides (IPA), for names the default voice mispronounces.
-# Keyed on the exact word as it appears in spoken text; tweak the IPA here to correct
-# pronunciation without touching the LLM prompt or the vendored plugin.
-PRONUNCIATION_DICTIONARY = {
-    "Astra": "ˈæstrə",
-    "Davanagere": "ˌdʌvənəˈɡɛri",
-    "Karnataka": "kɑːrˈnɑːtəkə",
-    "Srishyla": "ˈʃrɪʃjələ",
-    "Mallikarjunappa": "ˌmælɪkɑːrdʒuːˈnʌpə",
-    "Lingaraju": "ˌlɪŋɡəˈrɑːdʒuː",
-    "Shaukpal": "ˈʃɔːkpɑːl",
-    "Venu": "ˈveɪnuː",
-    "Subhash": "suːˈbɑːʃ",
+# IPA pronunciations for Kannada-origin and other proper nouns.
+# Cartesia uses inline syntax: <<s|y|m|b|o|l|s>> with stress marker.
+PRONUNCIATION_MAP: dict[str, str] = {
+    "Davanagere": "<<ˌ|d|ʌ|v|ə|n|ə|ˈ|ɡ|ɛ|r|i>>",
+    "Karnataka": "<<k|ɑː|ɹ|ˈ|n|ɑː|t|ə|k|ə>>",
+    "Srishyla": "<<ˈ|ʃ|ɹ|ɪ|ʃ|j|ə|l|ə>>",
+    "Mallikarjunappa": "<<ˌ|m|æ|l|ɪ|k|ɑː|ɹ|dʒ|uː|ˈ|n|ʌ|p|ə>>",
+    "Lingaraju": "<<ˌ|l|ɪ|ŋ|ɡ|ə|ˈ|ɹ|ɑː|dʒ|uː>>",
+    "Shaukpal": "<<ˈ|ʃ|ɔː|k|p|ɑː|l>>",
+    "Venu": "<<ˈ|v|eɪ|n|uː>>",
+    "Subhash": "<<s|uː|ˈ|b|ɑː|ʃ>>",
+    "Astra": "<<ˈ|æ|s|t|ɹ|ə>>",
 }
 
-
-class _PronunciationDictionaryService:
-    """Wraps a riva SpeechSynthesisService to inject custom_dictionary on every call."""
-
-    def __init__(self, inner, custom_dictionary: dict[str, str]) -> None:
-        self._inner = inner
-        self._custom_dictionary = custom_dictionary
-
-    def synthesize_online(self, *args, **kwargs):
-        kwargs.setdefault("custom_dictionary", self._custom_dictionary)
-        return self._inner.synthesize_online(*args, **kwargs)
-
-    def __getattr__(self, name):
-        return getattr(self._inner, name)
+_PRONUNCIATION_RE = re.compile(
+    r"\b(" + "|".join(re.escape(w) for w in PRONUNCIATION_MAP) + r")\b",
+    re.IGNORECASE,
+)
 
 
-class PronunciationTTS(nvidia.TTS):
-    """nvidia.TTS with a Riva custom_dictionary applied for known problem words."""
+def _apply_pronunciation(text: str) -> str:
+    """Replace known words with Cartesia inline phoneme overrides."""
 
-    def __init__(self, *, custom_dictionary: dict[str, str], **kwargs) -> None:
-        super().__init__(**kwargs)
-        self._custom_dictionary = custom_dictionary
+    def _replace(match: re.Match) -> str:
+        word = match.group(0)
+        key = next(k for k in PRONUNCIATION_MAP if k.lower() == word.lower())
+        return PRONUNCIATION_MAP[key]
 
-    def _ensure_session(self):
-        service = super()._ensure_session()
-        if not isinstance(service, _PronunciationDictionaryService):
-            service = _PronunciationDictionaryService(service, self._custom_dictionary)
-            self._tts_service = service
-        return service
+    return _PRONUNCIATION_RE.sub(_replace, text)
 
 
 SCHOOL_INFORMATION = {
@@ -193,6 +175,47 @@ SCHOOL_INFORMATION:
 """
 
 
+class _PronounceStream:
+    """Wraps a SynthesizeStream to apply pronunciation overrides to pushed text."""
+
+    def __init__(self, inner):
+        self._inner = inner
+
+    def push_text(self, token: str) -> None:
+        self._inner.push_text(_apply_pronunciation(token))
+
+    def end_input(self) -> None:
+        self._inner.end_input()
+
+    def flush(self) -> None:
+        self._inner.flush()
+
+    def __getattr__(self, name):
+        return getattr(self._inner, name)
+
+    async def __aenter__(self):
+        return self
+
+    async def __aexit__(self, *args):
+        await self._inner.__aexit__(*args)
+
+    def __aiter__(self):
+        return self._inner.__aiter__()
+
+    async def __anext__(self):
+        return await self._inner.__anext__()
+
+
+class PronounceTTS(cartesia.TTS):
+    """Cartesia TTS that applies inline phoneme overrides for known proper nouns."""
+
+    def synthesize(self, text: str, *, conn_options=None):
+        return super().synthesize(_apply_pronunciation(text), conn_options=conn_options)
+
+    def stream(self, *, conn_options=None):
+        return _PronounceStream(super().stream(conn_options=conn_options))
+
+
 class DefaultAgent(Agent):
     def __init__(self) -> None:
         super().__init__(
@@ -220,19 +243,26 @@ server.setup_fnc = prewarm
 @server.rtc_session(agent_name="Astra")
 async def entrypoint(ctx: JobContext):
     session = AgentSession(
-        stt=nvidia.STT(),
-        llm=openai.LLM(
-            model=NVIDIA_NIM_MODEL,
-            base_url=NVIDIA_NIM_BASE_URL,
-            api_key=os.environ.get("NVIDIA_API_KEY"),
+        stt=groq.STT(
+            model="whisper-large-v3-turbo",
+            language="en",
+        ),
+        llm=groq.LLM(
+            model="llama-3.3-70b-versatile",
             temperature=0.4,
         ),
-        tts=PronunciationTTS(custom_dictionary=PRONUNCIATION_DICTIONARY),
+        tts=PronounceTTS(
+            model="sonic-3",
+            voice="9626c31c-bec5-4cca-baa8-f8ba9e84c8bc",  # Jacqueline - confident American female
+            language="en",
+        ),
         turn_handling=TurnHandlingOptions(
             turn_detection=MultilingualModel(),
             interruption=InterruptionOptions(
-                min_duration=0.6,
-                min_words=2,
+                min_duration=1.0,
+                min_words=3,
+                resume_false_interruption=True,
+                false_interruption_timeout=2.0,
             ),
         ),
         vad=ctx.proc.userdata["vad"],

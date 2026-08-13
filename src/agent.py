@@ -1,5 +1,6 @@
 import logging
 import os
+
 from dotenv import load_dotenv
 from livekit.agents import (
     Agent,
@@ -14,9 +15,9 @@ from livekit.agents import (
 )
 from livekit.plugins import (
     noise_cancellation,
+    nvidia,
     openai,
     silero,
-    nvidia,
 )
 from livekit.plugins.turn_detector.multilingual import MultilingualModel
 
@@ -36,6 +37,10 @@ PRONUNCIATION_DICTIONARY = {
     "Karnataka": "kɑːrˈnɑːtəkə",
     "Srishyla": "ˈʃrɪʃjələ",
     "Mallikarjunappa": "ˌmælɪkɑːrdʒuːˈnʌpə",
+    "Lingaraju": "ˌlɪŋɡəˈrɑːdʒuː",
+    "Shaukpal": "ˈʃɔːkpɑːl",
+    "Venu": "ˈveɪnuː",
+    "Subhash": "suːˈbɑːʃ",
 }
 
 
@@ -68,6 +73,7 @@ class PronunciationTTS(nvidia.TTS):
             self._tts_service = service
         return service
 
+
 SCHOOL_INFORMATION = {
     "institution_name": "GM University",
     "motto": "Igniting Innovation, Inspiring Transformation",
@@ -81,9 +87,7 @@ SCHOOL_INFORMATION = {
         "over 67 academic programs across undergraduate, postgraduate, doctoral, "
         "and vocational levels."
     ),
-    "location": (
-        "GM University is located on P B Road, Davanagere, Karnataka, India."
-    ),
+    "location": ("GM University is located on P B Road, Davanagere, Karnataka, India."),
     "programs": (
         "GM University offers undergraduate, postgraduate, and doctoral programs "
         "through several schools: the Faculty of Engineering and Technology, the "
@@ -136,6 +140,14 @@ SCHOOL_INFORMATION = {
         "questions, email admissions@gmu.ac.in."
     ),
     "website": "www.gmu.ac.in",
+    "leadership": (
+        "GM University was founded by the Srishyla Education Trust under Sri G. "
+        "Mallikarjunappa. The Honorary Chairman of GM University is Shri G. M. "
+        "Lingaraju. The Honorary Vice Chancellor is Dr. S. R. Shaukpal. The "
+        "Honorary Pro Vice Chancellor is Dr. M. Venu Gopal Rao. The Honorary "
+        "Registrar is Dr. B. S. Sunil Kumar. The Honorary Management "
+        "Representative is Shri Y. V. Subhash Chandra."
+    ),
 }
 
 SYSTEM_PROMPT = f"""
@@ -177,6 +189,7 @@ SCHOOL_INFORMATION:
 - Contact Numbers: {SCHOOL_INFORMATION["contact_numbers"]}
 - Email Addresses: {SCHOOL_INFORMATION["email_addresses"]}
 - Website: {SCHOOL_INFORMATION["website"]}
+- Leadership: {SCHOOL_INFORMATION["leadership"]}
 """
 
 

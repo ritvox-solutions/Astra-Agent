@@ -331,7 +331,33 @@ class _PronounceStream:
 
 
 class PronounceTTS(elevenlabs.TTS):
-    """ElevenLabs TTS that applies inline phoneme overrides for known proper nouns."""
+    """ElevenLabs TTS with inline phoneme overrides and automatic API-key failover.
+
+    If the current API key's account runs out of quota (or otherwise fails to
+    connect), the next key in `fallback_api_keys` is swapped in and the
+    connection is retried immediately, so a single utterance doesn't have to
+    fail first. Once switched, the fallback key stays active for the rest of
+    this TTS instance's lifetime rather than retrying the exhausted key.
+    """
+
+    def __init__(self, *, fallback_api_keys: list[str] | None = None, **kwargs) -> None:
+        super().__init__(**kwargs)
+        self._fallback_api_keys = list(fallback_api_keys or [])
+
+    async def _current_connection(self):
+        try:
+            return await super()._current_connection()
+        except Exception as e:
+            if not self._fallback_api_keys:
+                raise
+            next_key = self._fallback_api_keys.pop(0)
+            logger.warning(
+                "ElevenLabs TTS connection failed on current API key (%s); "
+                "switching to fallback key",
+                e,
+            )
+            self._opts.api_key = next_key
+            return await super()._current_connection()
 
     def synthesize(self, text: str, *, conn_options=None):
         return super().synthesize(_apply_pronunciation(text), conn_options=conn_options)
@@ -379,6 +405,11 @@ async def entrypoint(ctx: JobContext):
         tts=PronounceTTS(
             model="eleven_turbo_v2",
             enable_ssml_parsing=True,
+            fallback_api_keys=[
+                key
+                for key in [os.environ.get("ELEVEN_API_KEY_2")]
+                if key
+            ],
         ),
         turn_handling=TurnHandlingOptions(
             turn_detection=MultilingualModel(),

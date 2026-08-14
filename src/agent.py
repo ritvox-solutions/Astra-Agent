@@ -43,6 +43,7 @@ PRONUNCIATION_MAP: dict[str, str] = {
     "Robotics": "ɹoʊˈbɑtɪks",
     "Chitradurga": "ˌtʃɪtrəˈdʊrɡə",
     "Halamma": "hʌˈlʌmə",
+    "Marulasiddappa": "ˌmɑːrʊləsɪˈdɑːpə",
 }
 
 _PRONUNCIATION_RE = re.compile(
@@ -89,6 +90,52 @@ SCHOOL_INFORMATION = {
         "Electronics and Communication Engineering, Electrical and Electronics Engineering, "
         "Robotics and Automation, Engineering Design, Civil Engineering, Biotechnology, "
         "and Mechanical Engineering."
+    ),
+    "department_heads": (
+        "Verified Heads of Department, as currently listed on the official GMU "
+        "website: the Electrical and Electronics Engineering department is headed "
+        "by Dr. Marulasiddappa H B, Associate Professor and HOD; the Electronics "
+        "and Communication Engineering department is headed by Dr. Praveen J, "
+        "Head of Department and Director of the School of Engineering; and the "
+        "Biotechnology department is headed by Dr. Prakash K K, Professor and "
+        "Head. The Mechanical Engineering department's page describes itself as "
+        "'a vibrant hub of learning, creativity, and innovation' offering "
+        "programs from undergraduate to doctoral level, with research and "
+        "industry collaboration through the G M Techno Centre and the IDEA Lab, "
+        "but its current HOD's name is not listed on the website. For Computer "
+        "Science and Engineering, Artificial Intelligence and Machine Learning, "
+        "Information Science and Engineering, Data Science, Cloud Computing, "
+        "Cyber Security, Internet of Things, Robotics and Automation, "
+        "Engineering Design, and Civil Engineering, no current HOD name is "
+        "verified in this knowledge base."
+    ),
+    "eee_department": (
+        "The Electrical and Electronics Engineering department is committed to "
+        "nurturing technically proficient, innovative, and socially responsible "
+        "engineers through project-based learning and hands-on experience with "
+        "emerging technologies via the LEAP platform."
+    ),
+    "ece_department": (
+        "The Electronics and Communication Engineering department offers a "
+        "four-year B Tech program giving foundational training in electronics "
+        "and communication systems. The curriculum combines core engineering "
+        "concepts with emerging technologies like IoT, wireless communication, "
+        "and AI, with hands-on learning through laboratories, projects, and "
+        "internships."
+    ),
+    "biotechnology_department": (
+        "The Biotechnology department offers education blending engineering "
+        "fundamentals with modern life sciences, aiming to equip students with "
+        "the knowledge, skills, and mindset needed to excel in the field of "
+        "Biotechnology through theoretical learning, practical experimentation, "
+        "and industry exposure."
+    ),
+    "mechanical_department": (
+        "The Mechanical Engineering department describes itself as a vibrant "
+        "hub of learning, creativity, and innovation, offering programs from "
+        "undergraduate to doctoral levels, with a focus on research, industry "
+        "collaboration, and entrepreneurial innovation through centers like the "
+        "G M Techno Centre and the IDEA Lab."
     ),
     "robotics": (
         "GM University has a Department of Robotics and Automation under the "
@@ -157,10 +204,15 @@ SCHOOL_INFORMATION = {
     ),
     "website": "https://gmu.ac.in/",
     "leadership": (
-        "The current GMU website lists G. M. Lingaraju as Chancellor and "
-        "Dr. S. R. Shankapal as Vice-Chancellor. Chancellor G. M. Lingaraju "
-        "is the son of the university's founder, the late Sri G. Mallikarjunappa, "
-        "who founded the Srishyla Education Trust in 2000."
+        "The Founder Chairman of the Srishyla Educational Trust was the late "
+        "Shri G. Mallikarjunappa. GMU's current leadership includes Shri G. M. "
+        "Lingaraju as Chancellor, Dr. S. R. Shankapal as Vice-Chancellor, "
+        "Professor Dr. M. Venu Gopala Rao as Pro-Vice-Chancellor, and Dr. Sunil "
+        "Kumar B. S. as Registrar. The Srishyla Educational Trust is currently "
+        "led by Shri G. M. Prasanna Kumar as Chairman and Shri G. S. Anith Kumar "
+        "as Treasurer, with R. Ashok Kumar serving as Chief Finance Officer. "
+        "Chancellor G. M. Lingaraju is the son of the university's founder, the "
+        "late Sri G. Mallikarjunappa."
     ),
     "chancellor_bio": (
         "Chancellor G. M. Lingaraju was born on August 15, 1968, in Chitradurga, "
@@ -190,6 +242,9 @@ IMPORTANT RULES:
 - Never invent or make up facts about the institution.
 - If information is not available in SCHOOL_INFORMATION, politely ask the user to contact the school office for accurate details.
 - You may answer general educational questions (mathematics, science, languages, general knowledge) normally.
+- You may also answer basic general-science and general-engineering questions (for example, "what is robotics", "what does AI and ML mean", "what is civil engineering", "what is the difference between electrical and electronics engineering") using your own general knowledge, even when the question isn't specifically about GMU.
+- When the user asks generally about GMU's departments (for example "what departments does GMU have" or "tell me about the departments"), list the departments from Engineering Programs and Academic Areas in SCHOOL_INFORMATION.
+- When the user asks about one SPECIFIC GMU department (for example "tell me about the Mechanical department" or "who is the HOD of E C E"), first confirm GMU offers it, then start your answer with the Head of Department's name and title if it is listed in Department Heads or in that department's own entry in SCHOOL_INFORMATION (E E E Department, E C E Department, Biotechnology Department, Mechanical Department, Robotics Department). If no HOD name is verified for that department, say so plainly (do not invent one) and continue with whatever description is available. After the HOD, explain what that field of engineering generally covers using your own knowledge, then give any GMU-specific details present in SCHOOL_INFORMATION. Only state GMU-specific facilities, software, faculty, or lab details that are actually present in SCHOOL_INFORMATION — for departments without listed specifics, suggest the user contact that department or check the official website.
 - Give thorough, informative answers. Aim for at least three to six spoken sentences that fully cover the relevant SCHOOL_INFORMATION details, not a one-line reply — unless the user asks a short yes/no question or explicitly asks you to be brief.
 - Speak naturally and clearly using simple words, conversational and easy to pronounce, but don't sacrifice useful detail for brevity.
 - Be warm, friendly, encouraging, and professional.
@@ -205,7 +260,7 @@ SPEECH AND PRONUNCIATION RULES (your text is spoken aloud by a voice synthesizer
 - Never read a phone number, PIN code, or reference number as one large number. Speak each digit individually, for example "eight one nine two, two three three three four four".
 - Read email addresses and website links as spoken words, for example "info at g m u dot a c dot in", not as one run-together string.
 - Numbers like years, percentages, and counts of people should be spoken naturally, for example "twenty twenty-three" and "one hundred percent".
-- Always write Kannada-origin proper nouns (Davanagere, Karnataka, Srishyla, Mallikarjunappa, Chitradurga, Halamma) exactly as spelled in SCHOOL_INFORMATION — do not respell or transliterate them yourself. Their pronunciation is handled separately by the voice synthesizer.
+- Always write Kannada-origin proper nouns (Davanagere, Karnataka, Srishyla, Mallikarjunappa, Chitradurga, Halamma, Marulasiddappa) exactly as spelled in SCHOOL_INFORMATION — do not respell or transliterate them yourself. Their pronunciation is handled separately by the voice synthesizer.
 
 SCHOOL_INFORMATION:
 - Institution Name: {SCHOOL_INFORMATION["institution_name"]}
@@ -215,6 +270,11 @@ SCHOOL_INFORMATION:
 - Current Statistics: {SCHOOL_INFORMATION["current_statistics"]}
 - Academic Areas: {SCHOOL_INFORMATION["academic_areas"]}
 - Engineering Programs: {SCHOOL_INFORMATION["engineering_programs"]}
+- Department Heads: {SCHOOL_INFORMATION["department_heads"]}
+- E E E Department: {SCHOOL_INFORMATION["eee_department"]}
+- E C E Department: {SCHOOL_INFORMATION["ece_department"]}
+- Biotechnology Department: {SCHOOL_INFORMATION["biotechnology_department"]}
+- Mechanical Department: {SCHOOL_INFORMATION["mechanical_department"]}
 - Robotics Department: {SCHOOL_INFORMATION["robotics"]}
 - Robotics Facilities: {SCHOOL_INFORMATION["robotics_facilities"]}
 - Robotics Software and Tools: {SCHOOL_INFORMATION["robotics_software"]}
@@ -242,7 +302,7 @@ BIRTHDAY RULES:
 class _PronounceStream:
     """Wraps a SynthesizeStream to apply pronunciation overrides to pushed text."""
 
-    def __init__(self, inner):
+    def __init__(self, inner):  
         self._inner = inner
 
     def push_text(self, token: str) -> None:

@@ -67,7 +67,8 @@ SCHOOL_INFORMATION = {
         "GM University is in Davanagere, Karnataka. It was established "
         "under Act 19 of 2023 of the State of Karnataka. The university was "
         "founded by the Srishyla Education Trust, which was started in 2000 by "
-        "Sri G. Mallikarjunappa, a well-known philanthropist and social visionary."
+        "the late Sri G. Mallikarjunappa, a former Member of Parliament and "
+        "well-known philanthropist and social visionary."
     ),
     "location": ("GM University is at P.B. Road, Davanagere, Karnataka, PIN 577006."),
     "current_statistics": (
@@ -148,13 +149,16 @@ SCHOOL_INFORMATION = {
         "Admissions: admissions@gmu.ac.in."
     ),
     "contact_numbers": (
-        "Main university numbers: +91 8192 233344, +91 8192 233345, and "
-        "9364099720. For department-specific contact numbers, visit the official website."
+        "Main university numbers: +91 8192 233344, +91 8192 233345, "
+        "+91 6364 259993, and 9364099720. For department-specific contact "
+        "numbers, visit the official website."
     ),
     "website": "https://gmu.ac.in/",
     "leadership": (
         "The current GMU website lists G. M. Lingaraju as Chancellor and "
-        "Dr. S. R. Shankapal as Vice-Chancellor."
+        "Dr. S. R. Shankapal as Vice-Chancellor. Chancellor G. M. Lingaraju "
+        "is the son of the university's founder, the late Sri G. Mallikarjunappa, "
+        "who founded the Srishyla Education Trust in 2000."
     ),
 }
 
@@ -168,8 +172,8 @@ IMPORTANT RULES:
 - Never invent or make up facts about the institution.
 - If information is not available in SCHOOL_INFORMATION, politely ask the user to contact the school office for accurate details.
 - You may answer general educational questions (mathematics, science, languages, general knowledge) normally.
-- Keep all answers concise, conversational, and easy to pronounce.
-- Speak naturally and clearly using simple words.
+- Give thorough, informative answers. Aim for at least three to six spoken sentences that fully cover the relevant SCHOOL_INFORMATION details, not a one-line reply — unless the user asks a short yes/no question or explicitly asks you to be brief.
+- Speak naturally and clearly using simple words, conversational and easy to pronounce, but don't sacrifice useful detail for brevity.
 - Be warm, friendly, encouraging, and professional.
 - Politely refuse unsafe or inappropriate requests.
 - When the user says goodbye, wants to end the conversation, or indicates they are done, thank them for their time and say goodbye warmly.

@@ -15,7 +15,7 @@ from livekit.agents import (
     room_io,
 )
 from livekit.plugins import (
-    cartesia,
+    elevenlabs,
     noise_cancellation,
     nvidia,
     openai,
@@ -27,20 +27,20 @@ logger = logging.getLogger("agent-Astra")
 
 load_dotenv(".env.local")
 
-# IPA pronunciations for Kannada-origin and other proper nouns.
-# Cartesia uses inline syntax: <<s|y|m|b|o|l|s>> with stress marker.
+# IPA pronunciations for Kannada-origin and other proper nouns, applied as
+# ElevenLabs SSML <phoneme> overrides (requires enable_ssml_parsing=True).
 PRONUNCIATION_MAP: dict[str, str] = {
-    "Davanagere": "<<ˌ|d|ʌ|v|ə|n|ə|ˈ|ɡ|ɛ|r|i>>",
-    "Karnataka": "<<k|ɑː|ɹ|ˈ|n|ɑː|t|ə|k|ə>>",
-    "Srishyla": "<<ˈ|ʃ|ɹ|ɪ|ʃ|j|ə|l|ə>>",
-    "Mallikarjunappa": "<<ˌ|m|æ|l|ɪ|k|ɑː|ɹ|dʒ|uː|ˈ|n|ʌ|p|ə>>",
-    "Lingaraju": "<<ˌ|l|ɪ|ŋ|ɡ|ə|ˈ|ɹ|ɑː|dʒ|uː>>",
-    "Shankapal": "<<ˈ|ʃ|æ|ŋ|k|ə|p|ɑː|l>>",
-    "Shaukpal": "<<ˈ|ʃ|ɔː|k|p|ɑː|l>>",
-    "Venu": "<<ˈ|v|eɪ|n|uː>>",
-    "Subhash": "<<s|uː|ˈ|b|ɑː|ʃ>>",
-    "Astra": "<<ˈ|æ|s|t|ɹ|ə>>",
-    "Robotics": "<<ɹ|oʊ|ˈ|b|ɑ|t|ɪ|k|s>>",
+    "Davanagere": "ˌdʌvənəˈɡɛri",
+    "Karnataka": "kɑːɹˈnɑːtəkə",
+    "Srishyla": "ˈʃɹɪʃjələ",
+    "Mallikarjunappa": "ˌmælɪkɑːɹdʒuːˈnʌpə",
+    "Lingaraju": "ˌlɪŋɡəˈɹɑːdʒuː",
+    "Shankapal": "ˈʃæŋkəpɑːl",
+    "Shaukpal": "ˈʃɔːkpɑːl",
+    "Venu": "ˈveɪnuː",
+    "Subhash": "suːˈbɑːʃ",
+    "Astra": "ˈæstɹə",
+    "Robotics": "ɹoʊˈbɑtɪks",
 }
 
 _PRONUNCIATION_RE = re.compile(
@@ -50,12 +50,12 @@ _PRONUNCIATION_RE = re.compile(
 
 
 def _apply_pronunciation(text: str) -> str:
-    """Replace known words with Cartesia inline phoneme overrides."""
+    """Wrap known words in ElevenLabs SSML phoneme overrides."""
 
     def _replace(match: re.Match) -> str:
         word = match.group(0)
         key = next(k for k in PRONUNCIATION_MAP if k.lower() == word.lower())
-        return PRONUNCIATION_MAP[key]
+        return f'<phoneme alphabet="ipa" ph="{PRONUNCIATION_MAP[key]}">{word}</phoneme>'
 
     return _PRONUNCIATION_RE.sub(_replace, text)
 
@@ -247,8 +247,8 @@ class _PronounceStream:
         return await self._inner.__anext__()
 
 
-class PronounceTTS(cartesia.TTS):
-    """Cartesia TTS that applies inline phoneme overrides for known proper nouns."""
+class PronounceTTS(elevenlabs.TTS):
+    """ElevenLabs TTS that applies inline phoneme overrides for known proper nouns."""
 
     def synthesize(self, text: str, *, conn_options=None):
         return super().synthesize(_apply_pronunciation(text), conn_options=conn_options)
@@ -294,9 +294,8 @@ async def entrypoint(ctx: JobContext):
             temperature=0.2,
         ),
         tts=PronounceTTS(
-            model="sonic-3",
-            voice="9626c31c-bec5-4cca-baa8-f8ba9e84c8bc",  # Jacqueline - confident American female
-            language="en",
+            model="eleven_turbo_v2",
+            enable_ssml_parsing=True,
         ),
         turn_handling=TurnHandlingOptions(
             turn_detection=MultilingualModel(),

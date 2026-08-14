@@ -12,6 +12,7 @@ dependencies = [
     "livekit-agents[silero,turn-detector]~=1.5",
     "livekit-plugins-ai-coustics~=0.2",
     "livekit-plugins-cartesia>=1.6.0",
+    "livekit-plugins-elevenlabs>=1.6.0",
     "livekit-plugins-groq>=1.6.0",
     "livekit-plugins-noise-cancellation~=0.2",
     "livekit-plugins-nvidia>=1.6.0",

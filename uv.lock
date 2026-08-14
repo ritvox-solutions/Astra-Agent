@@ -1081,6 +1081,7 @@ dependencies = [
     { name = "livekit-agents", extra = ["silero", "turn-detector"] },
     { name = "livekit-plugins-ai-coustics" },
     { name = "livekit-plugins-cartesia" },
+    { name = "livekit-plugins-elevenlabs" },
     { name = "livekit-plugins-groq" },
     { name = "livekit-plugins-noise-cancellation" },
     { name = "livekit-plugins-nvidia" },
@@ -1101,6 +1102,7 @@ requires-dist = [
     { name = "livekit-agents", extras = ["silero", "turn-detector"], specifier = "~=1.5" },
     { name = "livekit-plugins-ai-coustics", specifier = "~=0.2" },
     { name = "livekit-plugins-cartesia", specifier = ">=1.6.0" },
+    { name = "livekit-plugins-elevenlabs", specifier = ">=1.6.0" },
     { name = "livekit-plugins-groq", specifier = ">=1.6.0" },
     { name = "livekit-plugins-noise-cancellation", specifier = "~=0.2" },
     { name = "livekit-plugins-nvidia", specifier = ">=1.6.0" },
@@ -1256,6 +1258,18 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/eb/8c/852f31fe14d930f54108f5b31b719ca2268abf870f782312c9703d911175/livekit_plugins_cartesia-1.6.0.tar.gz", hash = "sha256:392d3f64c1d24ea273c92632a22e87680ba5c8ff057c31dc82f670286899f8a6", size = 18197, upload-time = "2026-06-11T21:37:28.705Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/52/2a/efa58d6635406bb781e286578f3dbf68eb5caac5e3b592a9ce430192d065/livekit_plugins_cartesia-1.6.0-py3-none-any.whl", hash = "sha256:fd08157fe6aacb94157881aa3f5eaac6779912e39ccf74af5bd94370f37935e2", size = 25533, upload-time = "2026-06-11T21:37:27.628Z" },
+]
+
+[[package]]
+name = "livekit-plugins-elevenlabs"
+version = "1.6.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "livekit-agents", extra = ["codecs"] },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/36/7f/bcd85bb841b29cb0e26fc55b1a2a73a5e6dae88c9e65af9309262bb9e353/livekit_plugins_elevenlabs-1.6.0.tar.gz", hash = "sha256:532673a0af8bdd9713f811f4b66d91d902e89edd68c864db4b36dfd0f441a0cf", size = 18300, upload-time = "2026-06-11T21:37:22.759Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/a0/55/ef7f5a912c227599bd3ae830ac2ef47347bd589bfb1f8aa2124b067cae95/livekit_plugins_elevenlabs-1.6.0-py3-none-any.whl", hash = "sha256:dbb13b5861d57b4628684712b62305e528eada852fb92ad78395a2200947b161", size = 20865, upload-time = "2026-06-11T21:37:21.598Z" },
 ]
 
 [[package]]

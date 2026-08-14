@@ -6,7 +6,10 @@ Requires-Python: >=3.10
 Requires-Dist: livekit-agents[silero,turn-detector]~=1.5
 Requires-Dist: livekit-plugins-ai-coustics~=0.2
 Requires-Dist: livekit-plugins-cartesia>=1.6.0
+Requires-Dist: livekit-plugins-elevenlabs>=1.6.0
 Requires-Dist: livekit-plugins-groq>=1.6.0
 Requires-Dist: livekit-plugins-noise-cancellation~=0.2
+Requires-Dist: livekit-plugins-nvidia>=1.6.0
+Requires-Dist: livekit-plugins-openai>=1.6.0
 Requires-Dist: python-dotenv
 Requires-Dist: python-handlebars

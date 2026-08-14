@@ -41,6 +41,8 @@ PRONUNCIATION_MAP: dict[str, str] = {
     "Subhash": "suːˈbɑːʃ",
     "Astra": "ˈæstɹə",
     "Robotics": "ɹoʊˈbɑtɪks",
+    "Chitradurga": "ˌtʃɪtrəˈdʊrɡə",
+    "Halamma": "hʌˈlʌmə",
 }
 
 _PRONUNCIATION_RE = re.compile(
@@ -160,6 +162,22 @@ SCHOOL_INFORMATION = {
         "is the son of the university's founder, the late Sri G. Mallikarjunappa, "
         "who founded the Srishyla Education Trust in 2000."
     ),
+    "chancellor_bio": (
+        "Chancellor G. M. Lingaraju was born on August 15, 1968, in Chitradurga, "
+        "Karnataka, the third son of the university's founder, the late Sri G. "
+        "Mallikarjunappa, and Smt. Halamma. He completed his schooling at Janaseva "
+        "Vidya Kendra and earned a B Com degree from Mysore University. After "
+        "graduating, he joined the family business, expanding its arecanut trading "
+        "operations from 1999, then founded the Srishyla Education Trust in 2000 "
+        "and the G M Institute of Technology in 2001. He later diversified into "
+        "real estate, wind energy, and the sugar and energy industry, and is now "
+        "Chairman of the G M Group of Companies and G M Sugar and Energy Limited. "
+        "Through the G. Mallikarjunappa, Smt. Halamma Charity Foundation, he "
+        "supports healthcare, scholarships, clean drinking water initiatives, and "
+        "student job fairs. As Chancellor, he envisions growing G M University to "
+        "a 20,000-student campus focused on global exposure, strong industry "
+        "connections, and research-driven, innovation-focused education."
+    ),
 }
 
 SYSTEM_PROMPT = f"""
@@ -187,7 +205,7 @@ SPEECH AND PRONUNCIATION RULES (your text is spoken aloud by a voice synthesizer
 - Never read a phone number, PIN code, or reference number as one large number. Speak each digit individually, for example "eight one nine two, two three three three four four".
 - Read email addresses and website links as spoken words, for example "info at g m u dot a c dot in", not as one run-together string.
 - Numbers like years, percentages, and counts of people should be spoken naturally, for example "twenty twenty-three" and "one hundred percent".
-- Always write Kannada-origin proper nouns (Davanagere, Karnataka, Srishyla, Mallikarjunappa) exactly as spelled in SCHOOL_INFORMATION — do not respell or transliterate them yourself. Their pronunciation is handled separately by the voice synthesizer.
+- Always write Kannada-origin proper nouns (Davanagere, Karnataka, Srishyla, Mallikarjunappa, Chitradurga, Halamma) exactly as spelled in SCHOOL_INFORMATION — do not respell or transliterate them yourself. Their pronunciation is handled separately by the voice synthesizer.
 
 SCHOOL_INFORMATION:
 - Institution Name: {SCHOOL_INFORMATION["institution_name"]}
@@ -210,6 +228,7 @@ SCHOOL_INFORMATION:
 - Contact Numbers: {SCHOOL_INFORMATION["contact_numbers"]}
 - Website: {SCHOOL_INFORMATION["website"]}
 - Leadership: {SCHOOL_INFORMATION["leadership"]}
+- Chancellor Biography: {SCHOOL_INFORMATION["chancellor_bio"]}
 
 BIRTHDAY RULES:
 - If the user says or implies: "Today is G M Lingaraju's birthday", "Today is Shri G. M. Lingaraju's birthday", or similar wording, respond by wishing Shri G. M. Lingaraju a happy birthday in a warm and generous way.
